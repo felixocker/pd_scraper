@@ -2,6 +2,10 @@
 """scraper for conrad.de"""
 
 import os
+import datetime
+import json
+import random
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -47,7 +51,6 @@ class ConradBot(webdriver.Chrome):
         elif page > 1:
             self.get('https://www.conrad.de/de/search.html?search='+keyword+'&page='+str(page))
 
-
     def get_product_pages(self, keyword: str, maxpages: int = None) -> None:
         for c in range(1, maxpages+1):
             self.land_search_page(keyword, c)
@@ -59,30 +62,48 @@ class ConradBot(webdriver.Chrome):
 
     def get_product_data(self):
         for pl in self.product_links:
-            data = {}
-            self.get(pl)
-            data["name"] = self.find_element(By.CSS_SELECTOR, 'h1[id="ProductTitle"]').text
-            data["code"] = self.find_element(By.CSS_SELECTOR, 'dd[id="manufacturerCode"]').text
-            wait = WebDriverWait(self, 10)
-            rows = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'dl[class="productTechData__list"]')))
-            for row in rows:
-                attribute = row.find_element(By.TAG_NAME, 'dt').text
-                value = row.find_element(By.TAG_NAME, 'span').text
-                data[attribute] = value
-            self.product_data.append(data)
+            # add some randomness to the bot
+            time.sleep(random.randint(0, 4))
+            data: dict = {}
+            try:
+                self.get(pl)
+                data["name"] = self.find_element(By.CSS_SELECTOR, 'h1[id="ProductTitle"]').text
+                data["url"] = pl
+                data["ean"] = self.find_element(By.CSS_SELECTOR, 'dd[id="eanCode"]').text
+                data["code"] = self.find_element(By.CSS_SELECTOR, 'dd[id="manufacturerCode"]').text
+                data["price"] = None
+                for ps in 'p[id="productPriceUnitPrice"]', 'span[id="productPriceUnitPrice"]':
+                    try:
+                        data["price"] = self.find_element(By.CSS_SELECTOR, ps).text
+                    except NoSuchElementException:
+                        pass
+                print(data["price"])
+                wait = WebDriverWait(self, 10)
+                rows = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'dl[class="productTechData__list"]')))
+                for row in rows:
+                    attribute = row.find_element(By.TAG_NAME, 'dt').text
+                    value = row.find_element(By.TAG_NAME, 'span').text
+                    data[attribute] = value
+                self.product_data.append(data)
+                print(f"scraped {pl}")
+            except Exception:
+                print(f"skipped {pl}")
+                pass
 
     def filter_product_type(self, product_types: list) -> None:
         inter = [pd for pd in self.product_data if "Produkt-Art" in pd]
         self.product_data = [pd for pd in inter if pd["Produkt-Art"] in product_types]
 
     def save_data(self):
-        raise NotImplementedError
-        # TODO: this
+        filename = "data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-conrad.json"
+        with open(filename, "w") as f:
+            json.dump(self.product_data, f, indent=4)
 
     def util_func(self):
         self.get_product_pages("microcontroller", 10)
         self.get_product_data()
         self.filter_product_type(['Embedded-Mikrocontroller', 'Single-Board-Computer'])
+        self.save_data()
 
 
 if __name__ == "__main__":
