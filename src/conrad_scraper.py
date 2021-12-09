@@ -94,7 +94,7 @@ class ConradBot(webdriver.Chrome):
         self.product_data = [pd for pd in inter if pd["Produkt-Art"] in product_types]
 
     def save_data(self):
-        filename = "data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-conrad.json"
+        filename = "../data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-conrad.json"
         with open(filename, "w") as f:
             json.dump(self.product_data, f, indent=4)
 

@@ -85,7 +85,7 @@ class InfinityBot(webdriver.Chrome):
                 pass
 
     def save_data(self):
-        filename = "data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-infinity.json"
+        filename = "../data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-infinity.json"
         with open(filename, "w") as f:
             json.dump(self.product_data, f, indent=4)
 
