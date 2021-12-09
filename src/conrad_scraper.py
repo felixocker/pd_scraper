@@ -77,7 +77,6 @@ class ConradBot(webdriver.Chrome):
                         data["price"] = self.find_element(By.CSS_SELECTOR, ps).text
                     except NoSuchElementException:
                         pass
-                print(data["price"])
                 wait = WebDriverWait(self, 10)
                 rows = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'dl[class="productTechData__list"]')))
                 for row in rows:
