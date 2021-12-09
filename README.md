@@ -19,5 +19,8 @@ the scraping part is an admittedly fragile implementation; works on my machine a
 * install dependencies, e.g., with pip ```pip install -r requirements.txt```
 * run via ```python pd_scraper.py```
 
+# license
+GPL v3.0
+
 # contact
 Felix Ocker - [felix.ocker@tum.de](mailto:felix.ocker@tum.de)
