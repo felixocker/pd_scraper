@@ -90,7 +90,7 @@ class InfinityBot(webdriver.Chrome):
             json.dump(self.product_data, f, indent=4)
 
     def util_func(self):
-        self.get_product_pages("Embedded-Microcontrollers", 2)
+        self.get_product_pages("Embedded-Microcontrollers", 20)
         self.get_product_data()
         self.save_data()
 
