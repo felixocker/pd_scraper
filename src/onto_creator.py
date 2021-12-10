@@ -64,33 +64,118 @@ INFINITY_DICT = {
 }
 
 
-def preprocess_conrad_data(data: list) -> list:
-    raise NotImplementedError
+def preprocess_conrad_data(data: list, logger) -> None:
+    # TODO: also add attributes scraped for single-board computers
+    for elem in data:
+        elem["price"] = float(elem["price"].split()[0].replace(",", "."))
+        for k in "clock_rate", "number_ios", "operating_temp_max", "operating_temp_min":
+            try:
+                elem[CONRAD_DICT[k][0]] = int(elem[CONRAD_DICT[k][0]])
+            except KeyError:
+                logger.info(f"no {k} available for {elem}")
+        for k in "voltage_max", "voltage_min":
+            try:
+                elem[CONRAD_DICT[k][0]] = float(elem[CONRAD_DICT[k][0]])
+            except KeyError:
+                logger.info(f"no {k} available for {elem}")
+        try:
+            elem[CONRAD_DICT["core_size_bit"][0]] = int(elem[CONRAD_DICT["core_size_bit"][0]].split("-Bit")[0])
+        except KeyError:
+            logger.info(f"no core_size_bit available for {elem}")
+        try:
+            if "KB" in elem[CONRAD_DICT["program_memory_size_kb"][0]]:
+                elem[CONRAD_DICT["program_memory_size_kb"][0]] = float(elem[CONRAD_DICT["program_memory_size_kb"][0]].split(" KB")[0])
+            elif "B" in elem[CONRAD_DICT["program_memory_size_kb"][0]]:
+                elem[CONRAD_DICT["program_memory_size_kb"][0]] = float(elem[CONRAD_DICT["program_memory_size_kb"][0]].split(" B")[0])/1000
+            else:
+                logger.info(f"unexpected memory unit in {elem[CONRAD_DICT['program_memory_size_kb'][0]]} for {elem[CONRAD_DICT['product_name'][0]]}")
+        except KeyError:
+            logger.info(f"no program_memory_size_kb available for {elem}")
 
 
-def preprocess_infinity_data(data: list) -> list:
-    raise NotImplementedError
+def preprocess_infinity_data(data: list, logger) -> None:
+    # TODO: do not treat ram info as string? - same for conrad data
+    for elem in data:
+        try:
+            elem["price"] = float(elem["price"][1:])
+        except TypeError:
+            logger.info(f"issue with the price for {elem[INFINITY_DICT['product_name'][0]]}")
+            elem.pop("price")
+        try:
+            elem[INFINITY_DICT["number_ios"][0]] = int(elem[INFINITY_DICT["number_ios"][0]])
+        except KeyError:
+            logger.info(f"no number_ios available for {elem[INFINITY_DICT['product_name'][0]]}")
+        elem[INFINITY_DICT["quantity_available"][0]] = int(elem[INFINITY_DICT["quantity_available"][0]].split(" pcs")[0])
+        try:
+            elem[INFINITY_DICT["core_size_bit"][0]] = int(elem[INFINITY_DICT["core_size_bit"][0]].split("-Bit")[0])
+        except KeyError:
+            logger.info(f"no core_size_bit available for {elem[INFINITY_DICT['product_name'][0]]}")
+        except ValueError:
+            logger.info(f"unexpected value in {elem[INFINITY_DICT['core_size_bit'][0]]} for {elem[INFINITY_DICT['product_name'][0]]}")
+            elem.pop(INFINITY_DICT['core_size_bit'][0])
+        try:
+            if "MHz" in elem[INFINITY_DICT["speed_mhz"][0]]:
+                elem[INFINITY_DICT["speed_mhz"][0]] = float(elem[INFINITY_DICT["speed_mhz"][0]].split("MHz")[0])
+            else:
+                logger.info(f"unexpected unit in {elem[INFINITY_DICT['speed_mhz'][0]]} for {elem[INFINITY_DICT['product_name'][0]]}")
+                elem.pop(INFINITY_DICT['speed_mhz'][0])
+        except KeyError:
+            logger.info(f"no speed_mhz available for {elem[INFINITY_DICT['product_name'][0]]}")
+        try:
+            if "KB" in elem[INFINITY_DICT["program_memory_size_kb"][0]]:
+                elem[INFINITY_DICT["program_memory_size_kb"][0]] = float(elem[INFINITY_DICT["program_memory_size_kb"][0]].split("KB")[0])
+            elif "MB" in elem[INFINITY_DICT["program_memory_size_kb"][0]]:
+                elem[INFINITY_DICT["program_memory_size_kb"][0]] = float(elem[INFINITY_DICT["program_memory_size_kb"][0]].split("MB")[0]*1000)
+            else:
+                logger.info(f"unexpected unit in {elem[INFINITY_DICT['program_memory_size_kb'][0]]} for {elem[INFINITY_DICT['product_name'][0]]}")
+                elem.pop(INFINITY_DICT['program_memory_size_kb'][0])
+        except KeyError:
+            logger.info(f"no program_memory_size_kb available for {elem[INFINITY_DICT['product_name'][0]]}")
+        # split up temperature values
+        try:
+            elem[INFINITY_DICT["operating_temp_max"][0]] = int(elem["OPERATING TEMPERATURE"].split(" ~ ")[1].split("°")[0])
+            elem[INFINITY_DICT["operating_temp_min"][0]] = int(elem["OPERATING TEMPERATURE"].split(" ~ ")[0].split("°")[0])
+        except KeyError:
+            logger.info(f"no operating_temp available for {elem[INFINITY_DICT['product_name'][0]]}")
+        # split up voltage values
+        try:
+            print(elem["VOLTAGE - SUPPLY (VCC/VDD)"])
+            elem[INFINITY_DICT["voltage_max"][0]] = float(elem["VOLTAGE - SUPPLY (VCC/VDD)"].split(" ~ ")[1].split(" V")[0])
+            elem[INFINITY_DICT["voltage_min"][0]] = float(elem["VOLTAGE - SUPPLY (VCC/VDD)"].split(" ~ ")[0].split(" V")[0])
+        except IndexError:
+            logger.info(f"issue with voltage for {elem[INFINITY_DICT['product_name'][0]]}")
+        except KeyError:
+            logger.info(f"no voltage available for {elem[INFINITY_DICT['product_name'][0]]}")
 
 
-def create_conrad_onto():
+def create_conrad_onto(scraped_data: list, logger) -> None:
     conrad = ontor.OntoEditor("http://example.org/conrad.owl", "../data/conrad.owl")
     classes = [["microcontroller", None]]
     # TODO: add single-core attributes too
     dps = [[cd, None, True, "microcontroller", CONRAD_DICT[cd][1], None, None, None, None, None] for cd in CONRAD_DICT]
     conrad.add_taxo(classes)
     conrad.add_dps(dps)
-    return conrad
+    preprocess_conrad_data(scraped_data, logger)
+    populate_with_scraped_data(conrad, scraped_data, logger, CONRAD_DICT)
 
 
-def create_infinity_onto():
+def create_infinity_onto(scraped_data: list, logger) -> None:
     infinity = ontor.OntoEditor("http://example.org/infinity.owl", "../data/infinity.owl")
     classes = [["microcontroller", None]]
     dps = [[cd, None, True, "microcontroller", INFINITY_DICT[cd][1], None, None, None, None, None] for cd in INFINITY_DICT]
     infinity.add_taxo(classes)
     infinity.add_dps(dps)
-    return infinity
+    preprocess_infinity_data(scraped_data, logger)
+    populate_with_scraped_data(infinity, scraped_data, logger, INFINITY_DICT)
 
 
-if __name__ == "__main__":
-    conrad = create_conrad_onto()
-    infinity = create_infinity_onto()
+def populate_with_scraped_data(pd_ontor, scraped_data, logger, pd_dict) -> None:
+    for c, prod in enumerate(scraped_data):
+        instance_name = "infinity_" + "0"*(3-len(str(c))) + str(c)
+        prod_ins_data = [[instance_name, "microcontroller", None, None, None]]
+        for key in pd_dict:
+            try:
+                prod_ins_data.append([instance_name, "microcontroller", key, prod[pd_dict[key][0]], pd_dict[key][1]])
+            except KeyError:
+                logger.info(f"{key} not available for product number {instance_name}")
+        pd_ontor.add_instances(prod_ins_data)
