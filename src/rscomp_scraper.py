@@ -16,11 +16,11 @@ from src import constants as const
 
 
 class RsCompBot(webdriver.Chrome):
-    def __init__(self, wait: int = 60, headless: bool = const.HEADLESS, maximize: bool = False,
-                 driver_path: str = const.CHROME_DRIVER_PATH, teardown: bool = True, logger=None) -> None:
+    def __init__(self, logger: logging.Logger, wait: int = 60, headless: bool = const.HEADLESS, maximize: bool = False,
+                 driver_path: str = const.CHROME_DRIVER_PATH, teardown: bool = True) -> None:
+        self.logger = logger
         self.maximize = maximize
         self.teardown = teardown
-        self.logger = logger
         self.optimized: list = []
         self.product_links: list = []
         self.product_data: list = []
@@ -69,13 +69,13 @@ class RsCompBot(webdriver.Chrome):
                     break
         self.product_links = list(dict.fromkeys(self.product_links))
 
-    def check_load_error(self):
+    def check_load_error(self) -> bool:
         load_error = False
         if self.find_element(By.ID, 'main-frame-error'):
             load_error = True
         return load_error
 
-    def get_product_data(self):
+    def get_product_data(self) -> None:
         for pl in self.product_links:
             # add some randomness to the bot
             time.sleep(random.randint(0, 4))
@@ -94,26 +94,25 @@ class RsCompBot(webdriver.Chrome):
                     attribute, value = row.find_all('td')
                     data[attribute.text] = value.text
                 self.product_data.append(data)
-                print(f"scraped {pl}")
                 self.logger.info(f"scraped {pl}")
+                print(f"scraped {pl}")
             except Exception:
                 self.logger.info(f"skipped {pl}")
                 print(f"skipped {pl}")
                 pass
 
-    def save_data(self):
+    def save_data(self) -> None:
         filename = "../data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-rscomponents.json"
         with open(filename, "w") as f:
             json.dump(self.product_data, f, indent=4)
 
-    def util_func(self, search_term, pages):
+    def util_func(self, search_term: str, pages: int) -> None:
         self.get_product_pages(search_term, pages)
         self.get_product_data()
         self.save_data()
 
 
 if __name__ == "__main__":
-    # set up local logger
     rsc_logfile = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "_rsc_scraper.log"
     rsc_formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     rsc_handler = logging.FileHandler(rsc_logfile)
@@ -123,5 +122,5 @@ if __name__ == "__main__":
     rsc_logger.addHandler(rsc_handler)
 
     cb = RsCompBot(logger=rsc_logger)
-    cb.util_func(search_term="microcontroller", pages=5)
+    cb.util_func(search_term="microcontroller", pages=3)
     print(*cb.product_data, sep="\n")

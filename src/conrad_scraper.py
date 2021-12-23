@@ -4,6 +4,7 @@
 import os
 import datetime
 import json
+import logging
 import random
 import time
 from selenium import webdriver
@@ -16,8 +17,9 @@ from src import constants as const
 
 
 class ConradBot(webdriver.Chrome):
-    def __init__(self, wait: int = 60, headless: bool = const.HEADLESS, maximize: bool = False,
+    def __init__(self, logger: logging.Logger, wait: int = 60, headless: bool = const.HEADLESS, maximize: bool = False,
                  driver_path: str = const.CHROME_DRIVER_PATH, teardown: bool = True) -> None:
+        self.logger = logger
         self.maximize = maximize
         self.teardown = teardown
         self.optimized: list = []
@@ -60,7 +62,7 @@ class ConradBot(webdriver.Chrome):
                 self.product_links.append(p.get_attribute('href'))
         self.product_links = list(dict.fromkeys(self.product_links))
 
-    def get_product_data(self):
+    def get_product_data(self) -> None:
         for pl in self.product_links:
             # add some randomness to the bot
             time.sleep(random.randint(0, 4))
@@ -84,8 +86,10 @@ class ConradBot(webdriver.Chrome):
                     value = row.find_element(By.TAG_NAME, 'span').text
                     data[attribute] = value
                 self.product_data.append(data)
+                self.logger.info(f"scraped {pl}")
                 print(f"scraped {pl}")
             except Exception:
+                self.logger.info(f"skipped {pl}")
                 print(f"skipped {pl}")
                 pass
 
@@ -93,19 +97,27 @@ class ConradBot(webdriver.Chrome):
         inter = [pd for pd in self.product_data if "Produkt-Art" in pd]
         self.product_data = [pd for pd in inter if pd["Produkt-Art"] in product_types]
 
-    def save_data(self):
+    def save_data(self) -> None:
         filename = "../data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-conrad.json"
         with open(filename, "w") as f:
             json.dump(self.product_data, f, indent=4)
 
-    def util_func(self):
-        self.get_product_pages("microcontroller", 10)
+    def util_func(self, search_term: str, pages: int) -> None:
+        self.get_product_pages(search_term, pages)
         self.get_product_data()
         self.filter_product_type(['Embedded-Mikrocontroller', 'Single-Board-Computer'])
         self.save_data()
 
 
 if __name__ == "__main__":
-    cb = ConradBot()
-    cb.util_func()
+    conrad_logfile = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "_conrad_scraper.log"
+    conrad_formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    conrad_handler = logging.FileHandler(conrad_logfile)
+    conrad_handler.setFormatter(conrad_formatter)
+    conrad_logger = logging.getLogger(conrad_logfile.split(".")[0])
+    conrad_logger.setLevel(logging.DEBUG)
+    conrad_logger.addHandler(conrad_handler)
+
+    cb = ConradBot(logger=conrad_logger)
+    cb.util_func(search_term="microcontroller", pages=3)
     print(*cb.product_data, sep="\n")

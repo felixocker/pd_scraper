@@ -19,13 +19,13 @@ pds_logger.setLevel(logging.DEBUG)
 pds_logger.addHandler(pds_handler)
 
 
-def main(scrape_new: bool):
+def main(scrape_new: bool, search_terms: dict, pages: int) -> None:
     # scrape data
     if scrape_new:
-        cb = conrad_scraper.ConradBot()
-        cb.util_func()
-        ib = infinity_scraper.InfinityBot()
-        ib.util_func()
+        cb = conrad_scraper.ConradBot(pds_logger)
+        cb.util_func(search_term=search_terms["conrad"], pages=pages)
+        ib = infinity_scraper.InfinityBot(pds_logger)
+        ib.util_func(search_term=search_terms["infinity"], pages=pages)
     # access data scraped
     scraped_files = os.listdir("../data/")
     with open("../data/"+sorted(sf for sf in scraped_files if "conrad.json" in sf)[-1], "r") as conrad_file:
@@ -39,4 +39,8 @@ def main(scrape_new: bool):
 
 
 if __name__ == "__main__":
-    main(scrape_new=False)
+    search_terms = {
+        "conrad": "microcontroller",
+        "infinity": "Embedded-Microcontrollers",
+    }
+    main(scrape_new=True, search_terms=search_terms, pages=1)

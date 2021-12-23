@@ -4,6 +4,7 @@
 import os
 import datetime
 import json
+import logging
 import random
 import time
 from selenium import webdriver
@@ -16,8 +17,9 @@ from src import constants as const
 
 
 class InfinityBot(webdriver.Chrome):
-    def __init__(self, wait: int = 60, headless: bool = const.HEADLESS, maximize: bool = False,
+    def __init__(self, logger: logging.Logger, wait: int = 60, headless: bool = const.HEADLESS, maximize: bool = False,
                  driver_path: str = const.CHROME_DRIVER_PATH, teardown: bool = True) -> None:
+        self.logger = logger
         self.maximize = maximize
         self.teardown = teardown
         self.optimized: list = []
@@ -56,7 +58,7 @@ class InfinityBot(webdriver.Chrome):
                 self.product_links.append(p.find_elements(By.XPATH, './/dd/a')[0].get_attribute('href'))
         self.product_links = list(dict.fromkeys(self.product_links))
 
-    def get_product_data(self):
+    def get_product_data(self) -> None:
         for pl in self.product_links:
             # add some randomness to the bot
             time.sleep(random.randint(0, 4))
@@ -79,23 +81,33 @@ class InfinityBot(webdriver.Chrome):
                     for a, v in zip(attributes, values):
                         data[a.text] = v.text
                 self.product_data.append(data)
+                self.logger.info(f"scraped {pl}")
                 print(f"scraped {pl}")
             except Exception:
+                self.logger.info(f"skipped {pl}")
                 print(f"skipped {pl}")
                 pass
 
-    def save_data(self):
+    def save_data(self) -> None:
         filename = "../data/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-infinity.json"
         with open(filename, "w") as f:
             json.dump(self.product_data, f, indent=4)
 
-    def util_func(self):
-        self.get_product_pages("Embedded-Microcontrollers", 20)
+    def util_func(self, search_term: str, pages: int) -> None:
+        self.get_product_pages(search_term, pages)
         self.get_product_data()
         self.save_data()
 
 
 if __name__ == "__main__":
-    cb = InfinityBot()
-    cb.util_func()
+    infinity_logfile = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "_infinity_scraper.log"
+    infinity_formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    infinity_handler = logging.FileHandler(infinity_logfile)
+    infinity_handler.setFormatter(infinity_formatter)
+    infinity_logger = logging.getLogger(infinity_logfile.split(".")[0])
+    infinity_logger.setLevel(logging.DEBUG)
+    infinity_logger.addHandler(infinity_handler)
+
+    cb = InfinityBot(logger=infinity_logger)
+    cb.util_func(search_term="Embedded-Microcontrollers", pages=3)
     print(*cb.product_data, sep="\n")
