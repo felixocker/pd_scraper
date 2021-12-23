@@ -5,8 +5,8 @@ product data scraper - scrape product data from vendor websites and create ontol
 the scraping part is an admittedly fragile implementation; works on my machine as of 12/21
 
 # content
-* bots for scraping product data for microcontrollers from [conrad](https://www.conrad.de/) and [infinity-electronic](https://www.infinity-semiconductor.com/)
-* module for creating two separate ontologies from the data scraped
+* bots for scraping product data for microcontrollers from [conrad](https://www.conrad.de/), [infinity-electronic](https://www.infinity-semiconductor.com/), and [RS Components](https://de.rs-online.com/web/)
+* module for creating separate ontologies from the data scraped from conrad and infinity
 
 # instructions
 * set up chrome driver
@@ -18,6 +18,10 @@ the scraping part is an admittedly fragile implementation; works on my machine a
   * activate: ```source .venv/bin/activate```
 * install dependencies, e.g., with pip ```pip install -r requirements.txt```
 * run via ```python pd_scraper.py```
+
+# requirements
+* Chrome
+* Python 3.9+ recommended
 
 # license
 GPL v3.0
