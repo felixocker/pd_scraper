@@ -35,7 +35,7 @@ def main(scrape_new: bool, search_terms: dict, pages: int) -> None:
     # create ontologies
     onto_creator.create_conrad_onto(conrad_data, pds_logger)
     onto_creator.create_infinity_onto(infinity_data, pds_logger)
-    # TODO: create gold standard for alignment - EAN or part number unique?
+    onto_creator.save_reference_alignment_as_csv("../data/gold_standard.csv")
 
 
 if __name__ == "__main__":

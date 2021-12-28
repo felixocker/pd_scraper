@@ -4,6 +4,7 @@
 __pycache__/
 
 # file types
+*.csv
 *.json
 *.log
 *.owl

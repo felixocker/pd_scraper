@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """create tboxes for ontologies to be populated with vendor catalog data"""
 
+import csv
+import itertools
+import json
+import logging
+import typing
 import ontor
+import owlready2
 
 CONRAD_DICT = {
     "product_name": ["name", "string"],
     "code": ["code", "string"],
     "price": ["price", "float"],
-    "type": ["Typ", "string"],
+    "prod_type": ["Typ", "string"],
     "manufacturer": ["Hersteller", "string"],
     "manuf_abbrev": ["Herst.-Abk.", "string"],
     "housing": ["Gehäuse", "string"],
@@ -64,8 +70,8 @@ INFINITY_DICT = {
 }
 
 
-def preprocess_conrad_data(data: list, logger) -> None:
-    # TODO: also add attributes scraped for single-board computers
+def preprocess_conrad_data(data: list, logger: logging.Logger, pp_file: typing.Optional[str] = None) -> None:
+    # TODO: also add attributes scraped for single-board computers, e.g., "Modell"
     for elem in data:
         elem["price"] = float(elem["price"].split()[0].replace(",", "."))
         for k in "clock_rate", "number_ios", "operating_temp_max", "operating_temp_min":
@@ -91,9 +97,12 @@ def preprocess_conrad_data(data: list, logger) -> None:
                 logger.info(f"unexpected memory unit in {elem[CONRAD_DICT['program_memory_size_kb'][0]]} for {elem[CONRAD_DICT['product_name'][0]]}")
         except KeyError:
             logger.info(f"no program_memory_size_kb available for {elem}")
+    if pp_file:
+        with open(pp_file, "w") as ppf:
+            json.dump(data, ppf, indent=4)
 
 
-def preprocess_infinity_data(data: list, logger) -> None:
+def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing.Optional[str] = None) -> None:
     # TODO: do not treat ram info as string? - same for conrad data
     for elem in data:
         try:
@@ -146,30 +155,33 @@ def preprocess_infinity_data(data: list, logger) -> None:
             logger.info(f"issue with voltage for {elem[INFINITY_DICT['product_name'][0]]}")
         except KeyError:
             logger.info(f"no voltage available for {elem[INFINITY_DICT['product_name'][0]]}")
+    if pp_file:
+        with open(pp_file, "w") as ppf:
+            json.dump(data, ppf, indent=4)
 
 
-def create_conrad_onto(scraped_data: list, logger) -> None:
+def create_conrad_onto(scraped_data: list, logger: logging.Logger) -> None:
     conrad = ontor.OntoEditor("http://example.org/conrad.owl", "../data/conrad.owl")
     classes = [["microcontroller", None]]
     # TODO: add single-core attributes too
     dps = [[cd, None, True, "microcontroller", CONRAD_DICT[cd][1], None, None, None, None, None] for cd in CONRAD_DICT]
     conrad.add_taxo(classes)
     conrad.add_dps(dps)
-    preprocess_conrad_data(scraped_data, logger)
+    preprocess_conrad_data(scraped_data, logger, "../data/conrad_data_dump.json")
     populate_with_scraped_data(conrad, scraped_data, logger, CONRAD_DICT)
 
 
-def create_infinity_onto(scraped_data: list, logger) -> None:
+def create_infinity_onto(scraped_data: list, logger: logging.Logger) -> None:
     infinity = ontor.OntoEditor("http://example.org/infinity.owl", "../data/infinity.owl")
     classes = [["microcontroller", None]]
     dps = [[cd, None, True, "microcontroller", INFINITY_DICT[cd][1], None, None, None, None, None] for cd in INFINITY_DICT]
     infinity.add_taxo(classes)
     infinity.add_dps(dps)
-    preprocess_infinity_data(scraped_data, logger)
+    preprocess_infinity_data(scraped_data, logger, "../data/infinity_data_dump.json")
     populate_with_scraped_data(infinity, scraped_data, logger, INFINITY_DICT)
 
 
-def populate_with_scraped_data(pd_ontor, scraped_data, logger, pd_dict) -> None:
+def populate_with_scraped_data(pd_ontor: ontor.OntoEditor, scraped_data: list, logger: logging.Logger, pd_dict: dict) -> None:
     for c, prod in enumerate(scraped_data):
         instance_name = "infinity_" + "0"*(3-len(str(c))) + str(c)
         prod_ins_data = [[instance_name, "microcontroller", None, None, None]]
@@ -179,3 +191,65 @@ def populate_with_scraped_data(pd_ontor, scraped_data, logger, pd_dict) -> None:
             except KeyError:
                 logger.info(f"{key} not available for product number {instance_name}")
         pd_ontor.add_instances(prod_ins_data)
+
+
+def save_reference_alignment_as_csv(alignment_file: str) -> None:
+    with open(alignment_file, "w") as af:
+        writer = csv.writer(af, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+        for line in create_reference_alignment():
+            writer.writerow(line)
+
+
+def create_reference_alignment(conrad_iri: str = "http://example.org/conrad.owl",
+                               infinity_iri: str = "http://example.org/infinity.owl") -> list:
+    """ create reference alignment based on infinity part number and conrad typ
+
+    :return: nested list with expected correspondences [elem1, elem2, relationship]
+    """
+    matches = find_matches("../data/conrad_data_dump.json", "../data/infinity_data_dump.json")
+    correspondences: list = []
+    owlready2.onto_path.append("../data/")
+    conrad_onto = owlready2.get_ontology(conrad_iri).load()
+    infinity_onto = owlready2.get_ontology(infinity_iri).load()
+    for m in matches:
+        conrad_iri = conrad_onto.search_one(prod_type = m[0][1])
+        infinity_iri = infinity_onto.search_one(part_number = m[1][1])
+        correspondences.append([conrad_iri.iri, infinity_iri.iri, "equivalence"])
+    return correspondences
+
+
+def find_matches(pp_file_conrad: str, pp_file_infinity: str) -> list:
+    """ find matches between products, relevant keys are Typ (Modell for raspis) and PART NUMBER for conrad and
+    infinity, respectively
+    """
+    matches: list = []
+    ids_conrad: list = []
+    for entry in load_pp_dump(pp_file_conrad):
+        if "Typ" in entry:
+            ids_conrad.append((entry["name"], entry["Typ"]))
+        elif "Modell" in entry:
+            ids_conrad.append((entry["name"], entry["Modell"]))
+        else:
+            print(f"conrad: no identifier for {entry}")
+    ids_infinity: list = []
+    for entry in load_pp_dump(pp_file_infinity):
+        if "PART NUMBER" in entry:
+            ids_infinity.append((entry["name"], entry["PART NUMBER"]))
+        else:
+            print(f"infinity: no identifier for {entry}")
+    for id_c, id_i in itertools.product(ids_conrad, ids_infinity):
+        if id_c[1] == id_i[1]:
+            matches.append((id_c, id_i))
+    return matches
+
+
+def load_pp_dump(pp_file: str) -> list:
+    """load data dumps w preprocessed data"""
+    with open(pp_file, "r") as pp_dump:
+        pp_data = json.load(pp_dump)
+    return pp_data
+
+
+if __name__ == "__main__":
+    print(create_reference_alignment())
+    save_reference_alignment_as_csv("test.csv")
