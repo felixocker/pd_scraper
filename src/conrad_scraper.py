@@ -56,7 +56,7 @@ class ConradBot(webdriver.Chrome):
     def get_product_pages(self, keyword: str, maxpages: int = None) -> None:
         for c in range(1, maxpages+1):
             self.land_search_page(keyword, c)
-            product_list = self.find_element(By.CSS_SELECTOR, 'tbody[name="tbody"]')
+            product_list = self.find_element(By.ID, 'scroller')
             product_pages = product_list.find_elements(By.CSS_SELECTOR, 'a[class="product__title"]')
             for p in product_pages:
                 self.product_links.append(p.get_attribute('href'))
