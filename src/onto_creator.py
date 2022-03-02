@@ -17,7 +17,7 @@ CONRAD_DICT = {
     "manufacturer": ["Hersteller", "string"],
     "manuf_abbrev": ["Herst.-Abk.", "string"],
     "housing": ["Gehäuse", "string"],
-    "clock_rate": ["Takt-Frequenz", "integer"],
+    "clock_rate": ["Takt-Frequenz", "float"],
     "series": ["Serie", "string"],
     "core_size_bit": ["Kerngröße", "integer"],
     "core_processor": ["Kern-Prozessor", "string"],
@@ -48,7 +48,7 @@ INFINITY_DICT = {
     "voltage_max": ["VOLTAGE - SUPPLY (VCC/VDD) MAX", "integer"],
     "voltage_min": ["VOLTAGE - SUPPLY (VCC/VDD) MIN", "integer"],
     "supplier_device_package": ["SUPPLIER DEVICE PACKAGE", "string"],
-    "speed_mhz": ["SPEED", "float"],
+    "clock_rate": ["SPEED", "float"],
     "series": ["SERIES", "string"],
     "ram_size": ["RAM SIZE", "string"],
     "program_memory_type": ["PROGRAM MEMORY TYPE", "string"],
@@ -68,6 +68,20 @@ INFINITY_DICT = {
     "core_processor": ["CORE PROCESSOR", "string"],
     "connectivity": ["CONNECTIVITY", "string"],
 }
+
+MC_CLASSES = [["microcontroller", None],
+              ["undefined_speed_controller", "microcontroller"],
+              ["low_speed_controller", "microcontroller"],
+              ["medium_speed_controller", "microcontroller"],
+              ["high_speed_controller", "microcontroller"]]
+
+MC_SPEEDS = {
+    "low_speed_controller": [1, 25],
+    "medium_speed_controller": [26, 100],
+    "high_speed_controller": [101, float('inf')]
+}
+
+ADD_ARTIFICIAL_SC = True
 
 
 def preprocess_conrad_data(data: list, logger: logging.Logger, pp_file: typing.Optional[str] = None) -> None:
@@ -123,13 +137,13 @@ def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing
             logger.info(f"unexpected value in {elem[INFINITY_DICT['core_size_bit'][0]]} for {elem[INFINITY_DICT['product_name'][0]]}")
             elem.pop(INFINITY_DICT['core_size_bit'][0])
         try:
-            if "MHz" in elem[INFINITY_DICT["speed_mhz"][0]]:
-                elem[INFINITY_DICT["speed_mhz"][0]] = float(elem[INFINITY_DICT["speed_mhz"][0]].split("MHz")[0])
+            if "MHz" in elem[INFINITY_DICT["clock_rate"][0]]:
+                elem[INFINITY_DICT["clock_rate"][0]] = float(elem[INFINITY_DICT["clock_rate"][0]].split("MHz")[0])
             else:
-                logger.info(f"unexpected unit in {elem[INFINITY_DICT['speed_mhz'][0]]} for {elem[INFINITY_DICT['product_name'][0]]}")
-                elem.pop(INFINITY_DICT['speed_mhz'][0])
+                logger.info(f"unexpected unit in {elem[INFINITY_DICT['clock_rate'][0]]} for {elem[INFINITY_DICT['product_name'][0]]}")
+                elem.pop(INFINITY_DICT['clock_rate'][0])
         except KeyError:
-            logger.info(f"no speed_mhz available for {elem[INFINITY_DICT['product_name'][0]]}")
+            logger.info(f"no clock_rate available for {elem[INFINITY_DICT['product_name'][0]]}")
         try:
             if "KB" in elem[INFINITY_DICT["program_memory_size_kb"][0]]:
                 elem[INFINITY_DICT["program_memory_size_kb"][0]] = float(elem[INFINITY_DICT["program_memory_size_kb"][0]].split("KB")[0])
@@ -148,7 +162,6 @@ def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing
             logger.info(f"no operating_temp available for {elem[INFINITY_DICT['product_name'][0]]}")
         # split up voltage values
         try:
-            print(elem["VOLTAGE - SUPPLY (VCC/VDD)"])
             elem[INFINITY_DICT["voltage_max"][0]] = float(elem["VOLTAGE - SUPPLY (VCC/VDD)"].split(" ~ ")[1].split(" V")[0])
             elem[INFINITY_DICT["voltage_min"][0]] = float(elem["VOLTAGE - SUPPLY (VCC/VDD)"].split(" ~ ")[0].split(" V")[0])
         except IndexError:
@@ -162,35 +175,53 @@ def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing
 
 def create_conrad_onto(scraped_data: list, logger: logging.Logger) -> None:
     conrad = ontor.OntoEditor("http://example.org/conrad.owl", "../data/conrad.owl")
-    classes = [["microcontroller", None]]
     # TODO: add single-core attributes too
     dps = [[cd, None, True, "microcontroller", CONRAD_DICT[cd][1], None, None, None, None, None] for cd in CONRAD_DICT]
-    conrad.add_taxo(classes)
+    create_taxo(conrad)
     conrad.add_dps(dps)
     preprocess_conrad_data(scraped_data, logger, "../data/conrad_data_dump.json")
-    populate_with_scraped_data(conrad, scraped_data, logger, CONRAD_DICT)
+    populate_with_scraped_data("conrad", conrad, scraped_data, logger, CONRAD_DICT)
 
 
 def create_infinity_onto(scraped_data: list, logger: logging.Logger) -> None:
     infinity = ontor.OntoEditor("http://example.org/infinity.owl", "../data/infinity.owl")
-    classes = [["microcontroller", None]]
     dps = [[cd, None, True, "microcontroller", INFINITY_DICT[cd][1], None, None, None, None, None] for cd in INFINITY_DICT]
-    infinity.add_taxo(classes)
+    create_taxo(infinity)
     infinity.add_dps(dps)
     preprocess_infinity_data(scraped_data, logger, "../data/infinity_data_dump.json")
-    populate_with_scraped_data(infinity, scraped_data, logger, INFINITY_DICT)
+    populate_with_scraped_data("infinity", infinity, scraped_data, logger, INFINITY_DICT)
 
 
-def populate_with_scraped_data(pd_ontor: ontor.OntoEditor, scraped_data: list, logger: logging.Logger, pd_dict: dict) -> None:
+def create_taxo(oe: ontor.OntoEditor) -> None:
+    if ADD_ARTIFICIAL_SC:
+        oe.add_taxo(MC_CLASSES)
+    else:
+        oe.add_taxo([MC_CLASSES[0]])
+
+
+def populate_with_scraped_data(prefix: str, pd_ontor: ontor.OntoEditor, scraped_data: list, logger: logging.Logger, pd_dict: dict) -> None:
     for c, prod in enumerate(scraped_data):
-        instance_name = "infinity_" + "0"*(3-len(str(c))) + str(c)
-        prod_ins_data = [[instance_name, "microcontroller", None, None, None]]
+        instance_name = prefix + "_" + "0"*(3-len(str(c))) + str(c)
+        if ADD_ARTIFICIAL_SC:
+            parent_name = get_parent_for_speed(prod, pd_dict["clock_rate"][0])
+        else:
+            parent_name = "microcontroller"
+        prod_ins_data = [[instance_name, parent_name, None, None, None]]
         for key in pd_dict:
             try:
-                prod_ins_data.append([instance_name, "microcontroller", key, prod[pd_dict[key][0]], pd_dict[key][1]])
+                prod_ins_data.append([instance_name, parent_name, key, prod[pd_dict[key][0]], pd_dict[key][1]])
             except KeyError:
                 logger.info(f"{key} not available for product number {instance_name}")
         pd_ontor.add_instances(prod_ins_data)
+
+
+def get_parent_for_speed(data: dict, speed_key: str) -> str:
+    parent = "undefined_speed_controller"
+    if speed_key in data:
+        for p in MC_SPEEDS:
+            if MC_SPEEDS[p][0] <= data[speed_key] <= MC_SPEEDS[p][1]:
+                parent = p
+    return parent
 
 
 def save_reference_alignment_as_csv(alignment_file: str) -> None:
@@ -212,8 +243,8 @@ def create_reference_alignment(conrad_iri: str = "http://example.org/conrad.owl"
     conrad_onto = owlready2.get_ontology(conrad_iri).load()
     infinity_onto = owlready2.get_ontology(infinity_iri).load()
     for m in matches:
-        conrad_iri = conrad_onto.search_one(prod_type = m[0][1])
-        infinity_iri = infinity_onto.search_one(part_number = m[1][1])
+        conrad_iri = conrad_onto.search_one(prod_type=m[0][1])
+        infinity_iri = infinity_onto.search_one(part_number=m[1][1])
         correspondences.append([conrad_iri.iri, infinity_iri.iri, "equivalence"])
     return correspondences
 
