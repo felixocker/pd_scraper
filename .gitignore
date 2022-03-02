@@ -9,3 +9,5 @@ __pycache__/
 *.log
 *.owl
 
+# track specific files
+!data/attribute_mapping_manual.csv
