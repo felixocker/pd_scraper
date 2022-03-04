@@ -83,8 +83,11 @@ class ConradBot(webdriver.Chrome):
                 rows = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'dl[class="productTechData__list"]')))
                 for row in rows:
                     attribute = row.find_element(By.TAG_NAME, 'dt').text
-                    value = row.find_element(By.TAG_NAME, 'span').text
-                    data[attribute] = value
+                    values = [v.text for v in row.find_elements(By.TAG_NAME, 'span')]
+                    if len(values) == 1:
+                        data[attribute] = values[0]
+                    elif len(values) > 1:
+                        data[attribute] = values
                 self.product_data.append(data)
                 self.logger.info(f"scraped {pl}")
                 print(f"scraped {pl}")
