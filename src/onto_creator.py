@@ -22,7 +22,7 @@ CONRAD_DICT = {
     "core_size_bit": ["Kerngröße", "integer"],
     "core_processor": ["Kern-Prozessor", "string"],
     "oscillator_type": ["Oszillator-Typ", "string"],
-    "periphery_devices": ["Peripheriegeräte", "string"],
+    "periphery_devices": ["Peripheriegeräte", "string", "list"],
     "number_ios": ["Anzahl I/O", "integer"],
     "program_memory_type": ["Programmspeichertyp", "string"],
     "voltage_max": ["Versorgungsspannung max.", "float"],
@@ -31,7 +31,7 @@ CONRAD_DICT = {
     "operating_temp_min": ["Betriebstemperatur (min.)", "integer"],
     "data_converter": ["Datenwandler (Embedded Mikrocontroller)", "string"],
     "eeprom": ["EEPROM Größe", "string"],
-    "connectivity": ["Konnektivität", "string"],
+    "connectivity": ["Konnektivität", "string", "list"],
     "program_memory_size_kb": ["Programmspeichergröße", "float"],
     "ram_size": ["RAM-Größe", "string"],
 }
@@ -53,7 +53,7 @@ INFINITY_DICT = {
     "ram_size": ["RAM SIZE", "string"],
     "program_memory_type": ["PROGRAM MEMORY TYPE", "string"],
     "program_memory_size_kb": ["PROGRAM MEMORY SIZE", "float"],
-    "peripherals": ["PERIPHERALS", "string"],
+    "peripherals": ["PERIPHERALS", "string", "list"],
     "packaging": ["PACKAGING", "string"],
     "package": ["PACKAGE / CASE", "string"],
     "oscillator_type": ["OSCILLATOR TYPE", "string"],
@@ -66,7 +66,7 @@ INFINITY_DICT = {
     "data_converters": ["DATA CONVERTERS", "string"],
     "core_size_bit": ["CORE SIZE", "integer"],
     "core_processor": ["CORE PROCESSOR", "string"],
-    "connectivity": ["CONNECTIVITY", "string"],
+    "connectivity": ["CONNECTIVITY", "string", "list"],
 }
 
 MC_CLASSES = [["microcontroller", None],
@@ -87,6 +87,12 @@ ADD_ARTIFICIAL_SC = True
 def preprocess_conrad_data(data: list, logger: logging.Logger, pp_file: typing.Optional[str] = None) -> None:
     # TODO: also add attributes scraped for single-board computers, e.g., "Modell"
     for elem in data:
+        # reduce to values if entry is of type [value, unit]
+        for k in CONRAD_DICT:
+            if CONRAD_DICT[k][0] in elem:
+                if len(CONRAD_DICT[k]) == 2 and isinstance(elem[CONRAD_DICT[k][0]], list):
+                    elem[CONRAD_DICT[k][0]] = elem[CONRAD_DICT[k][0]][0]
+        # properly format
         elem["price"] = float(elem["price"].split()[0].replace(",", "."))
         for k in "clock_rate", "number_ios", "operating_temp_max", "operating_temp_min":
             try:
@@ -168,6 +174,12 @@ def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing
             logger.info(f"issue with voltage for {elem[INFINITY_DICT['product_name'][0]]}")
         except KeyError:
             logger.info(f"no voltage available for {elem[INFINITY_DICT['product_name'][0]]}")
+        # handle lists
+        for k1, k2 in ("peripherals", "PERIPHERALS"), ("connectivity", "CONNECTIVITY"):
+            try:
+                elem[INFINITY_DICT[k1][0]] = elem[k2].split(", ")
+            except KeyError:
+                logger.info(f"no {k1} available for {elem[INFINITY_DICT['product_name'][0]]}")
     if pp_file:
         with open(pp_file, "w") as ppf:
             json.dump(data, ppf, indent=4)
@@ -176,8 +188,8 @@ def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing
 def create_conrad_onto(scraped_data: list, logger: logging.Logger) -> None:
     conrad = ontor.OntoEditor("http://example.org/conrad.owl", "../data/conrad.owl")
     # TODO: add single-core attributes too
-    dps = [[cd, None, True, "microcontroller", CONRAD_DICT[cd][1], None, None, None, None, None] for cd in CONRAD_DICT]
     create_taxo(conrad)
+    dps = dp_distinction(CONRAD_DICT, "microcontroller")
     conrad.add_dps(dps)
     preprocess_conrad_data(scraped_data, logger, "../data/conrad_data_dump.json")
     populate_with_scraped_data("conrad", conrad, scraped_data, logger, CONRAD_DICT)
@@ -185,11 +197,19 @@ def create_conrad_onto(scraped_data: list, logger: logging.Logger) -> None:
 
 def create_infinity_onto(scraped_data: list, logger: logging.Logger) -> None:
     infinity = ontor.OntoEditor("http://example.org/infinity.owl", "../data/infinity.owl")
-    dps = [[cd, None, True, "microcontroller", INFINITY_DICT[cd][1], None, None, None, None, None] for cd in INFINITY_DICT]
     create_taxo(infinity)
+    dps = dp_distinction(INFINITY_DICT, "microcontroller")
     infinity.add_dps(dps)
     preprocess_infinity_data(scraped_data, logger, "../data/infinity_data_dump.json")
     populate_with_scraped_data("infinity", infinity, scraped_data, logger, INFINITY_DICT)
+
+
+def dp_distinction(vocab: dict, cname: str) -> list:
+    # functional dps
+    dpsf = [[cd, None, True, cname, vocab[cd][1], None, None, None, None, None] for cd in vocab if len(vocab[cd]) == 2]
+    # non functional dps - additional element "list" in dict
+    dpsnf = [[cd, None, False, cname, vocab[cd][1], None, None, None, None, None] for cd in vocab if len(vocab[cd]) == 3]
+    return dpsf + dpsnf
 
 
 def create_taxo(oe: ontor.OntoEditor) -> None:
@@ -208,10 +228,13 @@ def populate_with_scraped_data(prefix: str, pd_ontor: ontor.OntoEditor, scraped_
             parent_name = "microcontroller"
         prod_ins_data = [[instance_name, parent_name, None, None, None]]
         for key in pd_dict:
-            try:
-                prod_ins_data.append([instance_name, parent_name, key, prod[pd_dict[key][0]], pd_dict[key][1]])
-            except KeyError:
+            if not pd_dict[key][0] in prod:
                 logger.info(f"{key} not available for product number {instance_name}")
+            elif isinstance(prod[pd_dict[key][0]], list):
+                for v in prod[pd_dict[key][0]]:
+                    prod_ins_data.append([instance_name, parent_name, key, v, pd_dict[key][1]])
+            else:
+                prod_ins_data.append([instance_name, parent_name, key, prod[pd_dict[key][0]], pd_dict[key][1]])
         pd_ontor.add_instances(prod_ins_data)
 
 
