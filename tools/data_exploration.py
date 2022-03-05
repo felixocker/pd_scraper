@@ -7,6 +7,7 @@ import csv
 import itertools
 import json
 import matplotlib.pyplot as plt
+from rapidfuzz.distance import Indel
 
 
 def load_pp_dump(pp_file: str) -> list:
@@ -28,11 +29,12 @@ def check_duplicate_attributes(pp_file: str) -> set:
     return same_val
 
 
-def find_matches(pp_file_conrad: str, pp_file_infinity: str) -> list:
+def find_matches(pp_file_conrad: str, pp_file_infinity: str) -> tuple:
     """ find matches between products, relevant keys are Typ (Modell for raspis) and PART NUMBER for conrad and
     infinity, respectively
     """
-    matches: list = []
+    exact_matches: list = []
+    sim_matches: list = []
     ids_conrad: list = []
     for entry in load_pp_dump(pp_file_conrad):
         if "Typ" in entry:
@@ -42,11 +44,18 @@ def find_matches(pp_file_conrad: str, pp_file_infinity: str) -> list:
             ids_conrad.append((entry["name"], entry["Modell"]))
         else:
             print(f"no identifier for {entry}")
-    ids_infinity = [(e["name"], e["PART NUMBER"]) for e in load_pp_dump(pp_file_infinity)]
+    ids_i1 = [(e["name"], e["PART NUMBER"]) for e in load_pp_dump(pp_file_infinity)]
+    ids_i2 = []
+    for e in load_pp_dump(pp_file_infinity):
+        if "OTHER NAMES" in e:
+            ids_i2.extend([(e["name"], on) for on in e["OTHER NAMES"]])
+    ids_infinity = ids_i1 + ids_i2
     for id_c, id_i in itertools.product(ids_conrad, ids_infinity):
         if id_c[1] == id_i[1]:
-            matches.append((id_c, id_i))
-    return matches
+            exact_matches.append((id_c, id_i))
+        if Indel.normalized_similarity(id_c[1], id_i[1]) > .8:
+            sim_matches.append((id_c, id_i))
+    return exact_matches, sim_matches
 
 
 def find_possible_classes(pp_file: str) -> dict:
@@ -57,7 +66,9 @@ def find_possible_classes(pp_file: str) -> dict:
     for e in data:
         for k in entries_per_key:
             if k in e:
-                entries_per_key[k].append(e[k])
+                # only consider functional attributes to avoid multiple inheritance
+                if not isinstance(e[k], list):
+                    entries_per_key[k].append(e[k])
     entries_per_key = {k: (len(set(entries_per_key[k])), len(entries_per_key[k])) for k in entries_per_key}
     return entries_per_key
 
@@ -116,9 +127,10 @@ if __name__ == "__main__":
     print("\noccurrences of attributes:")
     for data_dump in data_dumps:
         print(data_dump, ":", find_possible_classes(data_dump))
-    matches = find_matches(*data_dumps)
-    print(f"\n{len(matches)} matches:")
-    print(*matches, sep="\n")
+    exact_matches, sim_matches = find_matches(*data_dumps)
+    for name, matches in ("exact_matches", exact_matches), ("sim_matches", sim_matches):
+        print(f"\n{len(matches)} {name}:")
+        print(*matches, sep="\n")
     print("\nattribute overlap:")
     print(attribute_overlap("../data/attribute_mapping_manual.csv"))
     print("\nrange of clock rates:")
