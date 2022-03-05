@@ -1,4 +1,4 @@
-CONRAD_DICT,INFINITY_DICT
+http://example.org/conrad.owl#,http://example.org/infinity.owl#
 product_name,product_name
 code,part_number
 price,price

@@ -1,0 +1,5 @@
+http://example.org/conrad.owl#microcontroller,http://example.org/infinity.owl#microcontroller,equivalence
+http://example.org/conrad.owl#undefined_speed_controller,http://example.org/infinity.owl#undefined_speed_controller,equivalence
+http://example.org/conrad.owl#low_speed_controller,http://example.org/infinity.owl#low_speed_controller,equivalence
+http://example.org/conrad.owl#medium_speed_controller,http://example.org/infinity.owl#medium_speed_controller,equivalence
+http://example.org/conrad.owl#high_speed_controller,http://example.org/infinity.owl#high_speed_controller,equivalence

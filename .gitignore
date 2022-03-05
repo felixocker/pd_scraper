@@ -10,4 +10,5 @@ __pycache__/
 *.owl
 
 # track specific files
-!data/attribute_mapping_manual.csv
+!data/attribute_mapping.csv
+!data/class_mapping_manual.csv

@@ -132,7 +132,7 @@ if __name__ == "__main__":
         print(f"\n{len(matches)} {name}:")
         print(*matches, sep="\n")
     print("\nattribute overlap:")
-    print(attribute_overlap("../data/attribute_mapping_manual.csv"))
+    print(attribute_overlap("../data/attribute_mapping.csv"))
     print("\nrange of clock rates:")
     for data_dump in data_dumps:
         crr = clock_rate_ranges(data_dump)
