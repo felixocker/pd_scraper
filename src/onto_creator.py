@@ -2,9 +2,11 @@
 """create tboxes for ontologies to be populated with vendor catalog data"""
 
 import csv
+import datetime
 import itertools
 import json
 import logging
+import os
 import typing
 import ontor
 import owlready2
@@ -304,6 +306,28 @@ def load_pp_dump(pp_file: str) -> list:
     return pp_data
 
 
+def create_ontos(logger) -> None:
+    """create ontology files for conrad and infinity"""
+    # access data scraped
+    scraped_files = os.listdir("../data/")
+    with open("../data/"+sorted(sf for sf in scraped_files if "conrad.json" in sf)[-1], "r") as conrad_file:
+        conrad_data = json.load(conrad_file)
+    with open("../data/"+sorted(sf for sf in scraped_files if "infinity.json" in sf)[-1]) as infinity_file:
+        infinity_data = json.load(infinity_file)
+    # create ontologies
+    create_conrad_onto(conrad_data, logger)
+    create_infinity_onto(infinity_data, logger)
+    save_reference_alignment_as_csv("../data/gold_standard.csv")
+
+
 if __name__ == "__main__":
-    print(create_reference_alignment())
-    save_reference_alignment_as_csv("test.csv")
+    # set up logger
+    oncr_logfile = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "_onto_creator.log"
+    oncr_formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    oncr_handler = logging.FileHandler(oncr_logfile)
+    oncr_handler.setFormatter(oncr_formatter)
+    oncr_logger = logging.getLogger(oncr_logfile.split(".")[0])
+    oncr_logger.setLevel(logging.DEBUG)
+    oncr_logger.addHandler(oncr_handler)
+
+    create_ontos(oncr_logger)

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""main module for scraping data and creating ontologies"""
+"""
+main module for scraping data and creating ontologies
+"""
 
 import datetime
-import json
 import logging
-import os
 from src import conrad_scraper
 from src import infinity_scraper
 from src import onto_creator
@@ -20,22 +20,12 @@ pds_logger.addHandler(pds_handler)
 
 
 def main(scrape_new: bool, search_terms: dict, pages: int) -> None:
-    # scrape data
     if scrape_new:
         cb = conrad_scraper.ConradBot(pds_logger)
         cb.util_func(search_term=search_terms["conrad"], pages=pages)
         ib = infinity_scraper.InfinityBot(pds_logger)
         ib.util_func(search_term=search_terms["infinity"], pages=pages)
-    # access data scraped
-    scraped_files = os.listdir("../data/")
-    with open("../data/"+sorted(sf for sf in scraped_files if "conrad.json" in sf)[-1], "r") as conrad_file:
-        conrad_data = json.load(conrad_file)
-    with open("../data/"+sorted(sf for sf in scraped_files if "infinity.json" in sf)[-1]) as infinity_file:
-        infinity_data = json.load(infinity_file)
-    # create ontologies
-    onto_creator.create_conrad_onto(conrad_data, pds_logger)
-    onto_creator.create_infinity_onto(infinity_data, pds_logger)
-    onto_creator.save_reference_alignment_as_csv("../data/gold_standard.csv")
+    onto_creator.create_ontos(pds_logger)
 
 
 if __name__ == "__main__":
