@@ -153,10 +153,10 @@ def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing
         except KeyError:
             logger.info(f"no clock_rate available for {elem[INFINITY_DICT['product_name'][0]]}")
         try:
-            if "KB" in elem[INFINITY_DICT["program_memory_size_kb"][0]]:
+            if "KB " in elem[INFINITY_DICT["program_memory_size_kb"][0]]:
                 elem[INFINITY_DICT["program_memory_size_kb"][0]] = float(elem[INFINITY_DICT["program_memory_size_kb"][0]].split("KB")[0])
-            elif "MB" in elem[INFINITY_DICT["program_memory_size_kb"][0]]:
-                elem[INFINITY_DICT["program_memory_size_kb"][0]] = float(elem[INFINITY_DICT["program_memory_size_kb"][0]].split("MB")[0]*1000)
+            elif "MB " in elem[INFINITY_DICT["program_memory_size_kb"][0]]:
+                elem[INFINITY_DICT["program_memory_size_kb"][0]] = float(elem[INFINITY_DICT["program_memory_size_kb"][0]].split("MB")[0])*1000
             else:
                 logger.info(f"unexpected unit in {elem[INFINITY_DICT['program_memory_size_kb'][0]]} for {elem[INFINITY_DICT['product_name'][0]]}")
                 elem.pop(INFINITY_DICT['program_memory_size_kb'][0])
@@ -164,6 +164,9 @@ def preprocess_infinity_data(data: list, logger: logging.Logger, pp_file: typing
             logger.info(f"no program_memory_size_kb available for {elem[INFINITY_DICT['product_name'][0]]}")
         # split up temperature values
         try:
+            if " ~ " not in elem["OPERATING TEMPERATURE"]:
+                logger.info(f"no operating_temp available for {elem[INFINITY_DICT['product_name'][0]]}")
+                continue
             elem[INFINITY_DICT["operating_temp_max"][0]] = int(elem["OPERATING TEMPERATURE"].split(" ~ ")[1].split("°")[0])
             elem[INFINITY_DICT["operating_temp_min"][0]] = int(elem["OPERATING TEMPERATURE"].split(" ~ ")[0].split("°")[0])
         except KeyError:
@@ -223,7 +226,7 @@ def create_taxo(oe: ontor.OntoEditor) -> None:
 
 def populate_with_scraped_data(prefix: str, pd_ontor: ontor.OntoEditor, scraped_data: list, logger: logging.Logger, pd_dict: dict) -> None:
     for c, prod in enumerate(scraped_data):
-        instance_name = prefix + "_" + "0"*(3-len(str(c))) + str(c)
+        instance_name = prefix + "_" + "0"*(4-len(str(c))) + str(c)
         if ADD_ARTIFICIAL_SC:
             parent_name = get_parent_for_speed(prod, pd_dict["clock_rate"][0])
         else:
